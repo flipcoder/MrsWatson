@@ -39,7 +39,7 @@
 typedef struct {
   boolByte transportChanged;
   boolByte isPlaying;
-  unsigned long currentFrame;
+  SampleCount currentFrame;
 } AudioClockMembers;
 typedef AudioClockMembers *AudioClock;
 extern AudioClock audioClockInstance;
@@ -71,6 +71,12 @@ void advanceAudioClock(AudioClock self, const unsigned long blocksize);
  * @param self
  */
 void audioClockStop(AudioClock self);
+
+double audioClockSamplesToPpq(const SampleCount samples, const Tempo tempo,
+                              const SampleRate sampleRate);
+
+SampleCount audioClockPpqToSamples(const double ppq, const Tempo tempo,
+                                   const SampleRate sampleRate);
 
 /**
  * Free an audio clock instance and its associated resources.

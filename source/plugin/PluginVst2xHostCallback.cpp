@@ -191,10 +191,8 @@ VstIntPtr VSTCALLBACK pluginVst2xHostCallback(AEffect *effect, VstInt32 opcode,
     }
 
     if (value & kVstPpqPosValid) {
-      // TODO: Move calculations to AudioClock
-      double samplesPerBeat = (60.0 / getTempo()) * getSampleRate();
-      // Musical time starts with 1, not 0
-      vstTimeInfo.ppqPos = (vstTimeInfo.samplePos / samplesPerBeat) + 1.0;
+      vstTimeInfo.ppqPos = audioClockSamplesToPpq(audioClock->currentFrame,
+                                                  getTempo(), getSampleRate());
       logDebug("Current PPQ position is %g", vstTimeInfo.ppqPos);
       vstTimeInfo.flags |= kVstPpqPosValid;
     }
@@ -205,13 +203,15 @@ VstIntPtr VSTCALLBACK pluginVst2xHostCallback(AEffect *effect, VstInt32 opcode,
     }
 
     if (value & kVstBarsValid) {
+      double ppq = vstTimeInfo.ppqPos;
       if (!(value & kVstPpqPosValid)) {
-        logError("Plugin requested position in bars, but not PPQ");
+        ppq = audioClockSamplesToPpq(audioClock->currentFrame, getTempo(),
+                                     getSampleRate());
       }
 
       // TODO: Move calculations to AudioClock
       double currentBarPos =
-          floor(vstTimeInfo.ppqPos / (double)getTimeSignatureBeatsPerMeasure());
+          floor(ppq / (double)getTimeSignatureBeatsPerMeasure());
       vstTimeInfo.barStartPos =
           currentBarPos * (double)getTimeSignatureBeatsPerMeasure() + 1.0;
       logDebug("Current bar is %g", vstTimeInfo.barStartPos);
@@ -219,7 +219,7 @@ VstIntPtr VSTCALLBACK pluginVst2xHostCallback(AEffect *effect, VstInt32 opcode,
     }
 
     if (value & kVstCyclePosValid) {
-      // We don't support cycling, so this is always 0
+      // We don't support cycling, so this is always a noop
     }
 
     if (value & kVstTimeSigValid) {
@@ -254,7 +254,25 @@ VstIntPtr VSTCALLBACK pluginVst2xHostCallback(AEffect *effect, VstInt32 opcode,
     }
 
     if (value & kVstClockValid) {
-      logUnsupportedFeature("Sample frames until next clock");
+      logUnsupportedFeature("audioMasterGetTime with kVstClockValid is still \
+experimental and not fully tested");
+      double ppq = vstTimeInfo.ppqPos;
+      const Tempo tempo = getTempo();
+      const SampleRate sampleRate = getSampleRate();
+      if (!(value & kVstPpqPosValid)) {
+        ppq =
+            audioClockSamplesToPpq(audioClock->currentFrame, tempo, sampleRate);
+      }
+
+      const double mantissa = ppq - floor(ppq);
+      const double midiPulses = mantissa * 24.0;
+      const double midiPulsePercent = midiPulses - floor(midiPulses);
+      const double pulses = midiPulsePercent * (1.0 / 24.0);
+      const SampleCount samples =
+          audioClockPpqToSamples(pulses, tempo, sampleRate);
+
+      vstTimeInfo.samplesToNextClock = (VstInt32)samples * -1;
+      vstTimeInfo.flags |= kVstClockValid;
     }
 
     result = (VstIntPtr)&vstTimeInfo;
