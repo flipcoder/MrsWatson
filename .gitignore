@@ -53,3 +53,8 @@ Makefile
 Makefile.in
 *.cmake
 **/*.dir
+
+VST3 SDK
+main
+test
+vstsdk.zip
